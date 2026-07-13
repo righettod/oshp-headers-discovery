@@ -1,0 +1,14 @@
+[project]
+name = "http-response-security-headers-discovery"
+version = "1.0.0"
+description = "AI Agent for OSHP that tries to find HTTP response security header that OSHP misses."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "langchain>=1.3.11",
+    "langchain-core>=1.4.8",
+    "langchain-nvidia-ai-endpoints>=1.4.3",
+    "langgraph>=1.2.7",
+    "lxml>=6.1.1",
+]
