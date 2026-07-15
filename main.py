@@ -2,6 +2,7 @@ import json
 import os
 import time
 from dataclasses import asdict, dataclass, is_dataclass
+from datetime import datetime as date_ref
 from io import BytesIO
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -12,19 +13,21 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langgraph.graph import END, START, StateGraph
 from lxml import etree
+from markdownify import markdownify as md
 from pydantic import BaseModel, Field
 
-DEBUG = False
-HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED = ["COOKIE2", "PUBLIC-KEY-PINS", "PUBLIC-KEY-PINS-REPORT-ONLY", "SET-COOKIE2"]
+DEBUG = True
+HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED = ["PUBLIC-KEY-PINS", "PUBLIC-KEY-PINS-REPORT-ONLY", "EXPECT-CT", "ACCESS-CONTROL-ALLOW-CREDENTIALS", "ACCESS-CONTROL-ALLOW-HEADERS", "ACCESS-CONTROL-ALLOW-METHODS", "ACCESS-CONTROL-EXPOSE-HEADERS", "ACCESS-CONTROL-ALLOW-ORIGIN", "SET-COOKIE"]
 STATE_FILENAME = "state.json"
-DIAGRAM_FLOW_FILE = "diagram.png"
+DIAGRAM_FLOW_FILENAME = "diagram.png"
+DASHBOARD_FILENAME = "dashboard.md"
 HTTP_REQUEST_TIMEOUT = 240
 DEFAULT_ENCODING = "utf-8"
 LLM_API_KEY = os.environ["NVIDIA_BUILD_API_KEY"]
 LLM_API_RATE_MAX_REQUEST_BY_MINUTES = 40
 LLM_API_RATE_COOLDOWN_DELAY_IN_SECONDS = 65
 LLM_API_MAX_TRY_CALL = 4
-MAX_LOOP_ITERATION_COUNT = 4
+MAX_LOOP_ITERATION_COUNT = 2
 
 
 class NodeLoggerCallback(BaseCallbackHandler):
@@ -149,8 +152,6 @@ def handle_structured_model_call(model_name: str, structured_model, messages: li
     for _ in range(LLM_API_MAX_TRY_CALL):
         try:
             result = structured_model.invoke(messages)
-            if DEBUG:
-                print(f"{model_name}:\n==> {result}")
             if result is not None:
                 break
         except Exception as e:
@@ -168,7 +169,6 @@ def gather_http_header_names(state: PipelineState) -> PipelineState:
     headers_collections = state["headers_info_collection"]
     # Step 1: Use MDN data source
     source_url = "https://unpkg.com/@mdn/browser-compat-data/data.json"
-    spec_url_template = "https://raw.githubusercontent.com/mdn/browser-compat-data/refs/heads/main/http/headers/%s.json"
     response = httpx.get(source_url, follow_redirects=True, timeout=HTTP_REQUEST_TIMEOUT)
     response.raise_for_status()
     data = response.json()
@@ -179,14 +179,13 @@ def gather_http_header_names(state: PipelineState) -> PipelineState:
         if header_name_upper in headers_collections and headers_collections[header_name_upper].is_already_classified:
             continue
         # If a spec url is available then use it in priority
+        spec_url = None
         if "spec_url" in headers[header_name]["__compat"]:
             ref = headers[header_name]["__compat"]["spec_url"]
             if type(ref) is list and len(ref) > 0:
-                spec_url = str(ref[0])
+                spec_url = str(ref[0]).strip()
             else:
-                spec_url = ref
-        else:
-            spec_url = spec_url_template % header_name
+                spec_url = str(ref).strip()
         if header_name_upper in headers_collections:
             header_info = headers_collections[header_name_upper]
             header_info.spec_location = spec_url
@@ -198,6 +197,7 @@ def gather_http_header_names(state: PipelineState) -> PipelineState:
             header_info.is_security = True
             header_info.rfc_or_spec_content = ""
             header_info.is_security_classification_explanation = "Header explicitly ignored"
+            header_info.is_security_classification_validation_explanation = ""
         headers_collections[header_name_upper] = header_info
     # Step 2: Use IANA data source
     source_url = "https://www.iana.org/assignments/http-fields/http-fields.xml"
@@ -224,11 +224,31 @@ def gather_http_header_names(state: PipelineState) -> PipelineState:
         else:
             header_info = HeaderInfo(header_name_upper, None, None, None, "UNKNOWN", False, False)
         if rfc_url is not None:
-            header_info.rfc_location = rfc_url
+            header_info.rfc_location = rfc_url.strip()
         headers_collections[header_name_upper] = header_info
     # Delete the header named "*"
-    del headers_collections["*"]
-    state["headers_info_collection"] = headers_collections
+    if "*" in headers_collections:
+        del headers_collections["*"]
+    # Capture the RFC or SPEC content for all headers
+    for header_name, header_info in headers_collections.items():
+        # Prefer the RFC over the SPEC
+        if header_info.rfc_location is not None:
+            target_url = header_info.rfc_location
+        elif header_info.spec_location is not None:
+            target_url = header_info.spec_location
+        else:
+            target_url = None
+        if target_url is not None:
+            response = httpx.get(target_url, follow_redirects=True, timeout=HTTP_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            header_info.rfc_or_spec_content = response.text
+            # Convert the HTML to markdown the help a model to process the RFC/Spec data
+            if "<!doctype html>" in header_info.rfc_or_spec_content.lower():
+                header_info.rfc_or_spec_content = md(header_info.rfc_or_spec_content)
+            header_info.rfc_or_spec_content = header_info.rfc_or_spec_content.strip()
+    # Remove all headers for which there is no specification or RFC data captured as there is no information available by MDN/IANA to classify it
+    headers_collections_filtered = {header_name: header_info for header_name, header_info in headers_collections.items() if header_info.rfc_or_spec_content is not None and len(header_info.rfc_or_spec_content) > 0}
+    state["headers_info_collection"] = headers_collections_filtered
     return state
 
 
@@ -251,35 +271,18 @@ def identify_http_header_directions_without_model(state: PipelineState) -> Pipel
             else:
                 header_info.header_direction = "UNKNOWN"
             headers_collections[header_name] = header_info
-        elif header_info.rfc_location is not None:
-            # If the header is not know by MDN then try to find marker in the RFC.
+        if header_info.rfc_or_spec_content is not None and header_info.header_direction == "UNKNOWN":
+            # If the header is not know by MDN then try to find marker in the RFC/SPEC if available.
             # I do not use a model to read the RFC as first method due to the number of headers to handle so RFC to process.
             # I use this technics as a shortcut prior to use a model
-            response = httpx.get(header_info.rfc_location, follow_redirects=True, timeout=HTTP_REQUEST_TIMEOUT)
-            response.raise_for_status()
-            rfc_content = response.text
-            header_info.rfc_or_spec_content = rfc_content
-            if f"{header_name.lower()} response header" in rfc_content.lower():
+            rfc_content_lower = header_info.rfc_or_spec_content.lower()
+            if f"{header_name.lower()} response header" in rfc_content_lower:
                 header_info.header_direction = "RESPONSE"
-            elif f"{header_name.lower()} request header" in rfc_content.lower():
+            elif f"{header_name.lower()} request header" in rfc_content_lower:
                 header_info.header_direction = "REQUEST"
             else:
                 header_info.header_direction = "UNKNOWN"
             headers_collections[header_name] = header_info
-        elif header_info.spec_location is not None:
-            # Same with the specification in last way
-            response = httpx.get(header_info.spec_location, follow_redirects=True, timeout=HTTP_REQUEST_TIMEOUT)
-            response.raise_for_status()
-            spec_content = response.text
-            header_info.rfc_or_spec_content = spec_content
-            if f"{header_name.lower()} response header" in spec_content.lower():
-                header_info.header_direction = "RESPONSE"
-            elif f"{header_name.lower()} request header" in spec_content.lower():
-                header_info.header_direction = "REQUEST"
-            else:
-                header_info.header_direction = "UNKNOWN"
-            headers_collections[header_name] = header_info
-
     state["headers_info_collection"] = headers_collections
     return state
 
@@ -366,8 +369,8 @@ def identify_http_header_security_relation_with_model(state: PipelineState) -> P
   decide strictly from the definition above and the text given.
   2. Give strong weight to an explicit "Security Considerations" section that names this header.
   3. If the provided content does not clearly describe the header's purpose, classify as false rather than guessing.
-  4. When a header both has a security effect and a non-security primary purpose, classify as true if the security effect is a defining part of its purpose (not an incidental side note).
-  5. Consider the feedback of the validator agent present into the section "Feedback from the validator agent" to validate your decision. If the content is empty then you can ignore it.
+  4. Classify as true only if security is the header's PRIMARY purpose. If the header's primary purpose is something else (caching, content negotiation, compression, formatting, performance, general application/protocol behavior) and it merely has a secondary or indirect security effect, classify as false.
+  5. If "Feedback from the validator agent" is non-empty, treat it as a specific, identified flaw in your prior verdict. Re-examine the RFC content in light of that flaw and change your verdict if the feedback is correct. Only keep your original verdict if you can explain why the feedback's objection does not hold against the RFC text. If the content is empty then ignore this rule.
 
   Return only raw JSON, no markdown, no backticks, no explanation.
   Return exactly one of:
@@ -377,9 +380,10 @@ def identify_http_header_security_relation_with_model(state: PipelineState) -> P
   The user message will have this format:
   Header name: `name of the header`
   RFC content: `content of the RFC`
+  Your prior verdict: `is_security=<true/false> — <your prior reason>`
   Feedback from the validator agent: `content of the feedback`
 """
-    model = ChatNVIDIA(model=model_name, api_key=LLM_API_KEY, temperature=0.6, timeout=HTTP_REQUEST_TIMEOUT, max_completion_tokens=max_completion_tokens_wanted)
+    model = ChatNVIDIA(model=model_name, api_key=LLM_API_KEY, temperature=0.01, timeout=HTTP_REQUEST_TIMEOUT, max_completion_tokens=max_completion_tokens_wanted)
     structured_model = model.with_structured_output(SecurityClassification)
     headers_collections = state["headers_info_collection"]
     context_length_limit = (model_maximum_context_length - len(system_prompt)) - max_completion_tokens_wanted
@@ -390,6 +394,7 @@ def identify_http_header_security_relation_with_model(state: PipelineState) -> P
             user_prompt = f"""
 Header name: `{header_name}`.
 RFC content: `{header_info.rfc_or_spec_content[:context_length_limit]}`.
+Your prior verdict: `is_security={header_info.is_security} - {header_info.is_security_classification_explanation}`.
 Feedback from the validator agent: `{header_info.is_security_classification_validation_explanation}`.
 """
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
@@ -397,6 +402,8 @@ Feedback from the validator agent: `{header_info.is_security_classification_vali
             if classification is None:
                 # All attempts failed to produce a usable response; leave unclassified for a later run
                 continue
+            if DEBUG:
+                print(f"[CLASSIFIER][{header_name}] {classification}")
             header_info.is_security = classification.is_security
             header_info.is_security_classification_explanation = classification.reason
             headers_collections[header_name] = header_info
@@ -418,8 +425,10 @@ def determine_classification_state_for_non_response_header(state: PipelineState)
 
 
 def validate_classification_state(state: PipelineState) -> PipelineState:
-    model_name = "nvidia/llama-3.3-nemotron-super-49b-v1"
-    model_maximum_context_length = 131072  # 128000 * 1024 => See https://docs.api.nvidia.com/nim/reference/nvidia-llama-3_3-nemotron-super-49b-v1_5#model-overview
+    # Deliberately a different model family than the classifier's nvidia/llama-3.3-nemotron-super-49b-v1
+    # (itself a Llama-3.3 derivative) so the "independent reviewer" isn't just the same weights re-rolled.
+    model_name = "mistralai/mistral-medium-3.5-128b"
+    model_maximum_context_length = 131072  # Empirically confirmed to accept requests at least this large on NVIDIA Build
     max_completion_tokens_wanted = 200
     system_prompt = """
   You are an independent reviewer that receives an HTTP response header, its RFC/spec content, and a prior classifier's verdict on whether the header is SECURITY-RELATED. Your job is to check that verdict against the RFC/spec content and the definition below, and say whether you agree or disagree. Do not simply defer to the prior explanation — re-derive the answer yourself from the content provided.
@@ -441,10 +450,12 @@ def validate_classification_state(state: PipelineState) -> PipelineState:
   2. If "rfc_or_spec_content" is empty or does not clearly describe the header's purpose, you cannot verify the verdict: disagree if "is_security" is true (insufficient evidence to call it security-related), agree if "is_security" is false.
   3. Give strong weight to an explicit "Security Considerations" section that names this header.
   4. Treat "classification_explanation" as a claim to verify, not a fact — disagree if it is not actually supported by "rfc_or_spec_content".
+  5. Your reason must state specifically what is wrong with the prior verdict. If your reasoning would instead support the prior verdict, set "agree" to true and leave reason empty - do not disagree with a justification that argues for agreement.
+  6. If a header is indirectly influencing security then you must consider that the header is not directly security related.
 
   Return only raw JSON, no markdown, no backticks, no explanation.
   Return exactly one of:
-  {"agree": true, "reason": "empty string"}
+  {"agree": true, "reason": ""}
   {"agree": false, "reason": "short justification about why you disagree, max 20 words"}
 
   The user message will have this format:
@@ -457,7 +468,7 @@ def validate_classification_state(state: PipelineState) -> PipelineState:
     }
   ```
   """
-    model = ChatNVIDIA(model=model_name, api_key=LLM_API_KEY, temperature=0.6, timeout=HTTP_REQUEST_TIMEOUT, max_completion_tokens=max_completion_tokens_wanted)
+    model = ChatNVIDIA(model=model_name, api_key=LLM_API_KEY, temperature=0.01, timeout=HTTP_REQUEST_TIMEOUT, max_completion_tokens=max_completion_tokens_wanted)
     structured_model = model.with_structured_output(ClassificationReview)
     context_length_limit = (model_maximum_context_length - len(system_prompt)) - max_completion_tokens_wanted
     headers_collections = state["headers_info_collection"]
@@ -474,6 +485,8 @@ def validate_classification_state(state: PipelineState) -> PipelineState:
         if review is None:
             # All attempts failed to produce a usable response; leave unclassified for a later run
             continue
+        if DEBUG:
+            print(f"[REVIEWER][{header_name}] {review}")
         if review.agree:
             header_info.is_already_classified = True
             header_info.rfc_or_spec_content = ""  # Save space in the final json file
@@ -484,6 +497,20 @@ def validate_classification_state(state: PipelineState) -> PipelineState:
         headers_collections[header_name] = header_info
     state["headers_info_collection"] = headers_collections
     state["loop_interation_count"] = state["loop_interation_count"] + 1
+    # Handle classifier <=> validator infinite conflict loop.
+    # In this case consider the point of view of the validator as the right one
+    if state["loop_interation_count"] >= MAX_LOOP_ITERATION_COUNT:
+        for header_name, header_info in headers_collections.items():
+            if header_info.header_direction != "RESPONSE" or header_info.is_already_classified:
+                continue
+            if header_info.is_security_classification_validation_explanation != "":  # Presence of disagreement
+                print(f"[!] Forcing resolution of disputed header {header_name}: deferring to validator (classifier said is_security={header_info.is_security}).")
+                header_info.is_security = not header_info.is_security
+                header_info.is_already_classified = True
+                header_info.rfc_or_spec_content = ""  # Save space in the final json file
+                header_info.is_security_classification_validation_explanation = f"[Forced resolution] {header_info.is_security_classification_validation_explanation}"
+                headers_collections[header_name] = header_info
+        state["headers_info_collection"] = headers_collections
     return state
 
 
@@ -496,8 +523,9 @@ def identify_headers_missed_by_oshp(state: PipelineState) -> PipelineState:
     oshp_headers = [hdr["name"].upper() for hdr in response.json()["headers"]]
     # Find security header not documented by OSHP
     for header_name, header_info in headers_collections.items():
-        if header_info.header_direction == "RESPONSE" and header_info.is_security and header_name not in oshp_headers:
+        if header_info.header_direction == "RESPONSE" and header_info.is_security and header_name not in oshp_headers and header_name not in HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED:
             oshp_headers_missed.append(header_name)
+    state["last_update"] = date_ref.now().strftime("%Y-%m-%d %H:%M:%S")
     state["oshp_headers_missed"] = oshp_headers_missed
     return state
 
@@ -505,14 +533,56 @@ def identify_headers_missed_by_oshp(state: PipelineState) -> PipelineState:
 def classification_is_over(state: PipelineState) -> str:
     headers_collections = state["headers_info_collection"]
     all_response_headers_are_classified = "yes"
-    if state["loop_interation_count"] >= MAX_LOOP_ITERATION_COUNT:
-        print(f"[!] The maximum count of {MAX_LOOP_ITERATION_COUNT} iteration feedback loop was reached so force the end of the flow.")
-    else:
+    if state["loop_interation_count"] < MAX_LOOP_ITERATION_COUNT:
         for _, header_info in headers_collections.items():
             if header_info.header_direction == "RESPONSE" and header_info.is_security and not header_info.is_already_classified:
                 all_response_headers_are_classified = "no"
                 break
+    else:
+        print(f"[!] The maximum count of {MAX_LOOP_ITERATION_COUNT} iteration feedback loop was reached so force the end of the flow.")
     return all_response_headers_are_classified
+
+
+def create_dashboard(state: PipelineState) -> PipelineState:
+    headers_collections = state["headers_info_collection"]
+    dashboard_md_tpl = """
+> 🕑 Last update %s.
+
+%s
+"""
+    # Use markdownify to create a table in MD format from HTML format
+    header_table = """<table>
+<tr>
+<th>Header name</th>
+<th>Header direction</th>
+<th>Fully classified</th>
+<th>Classifier explanation</th>
+<th>Validator explanation</th>
+<th>Links</th>
+</tr>
+    """
+    for header_name, header_info in headers_collections.items():
+        if header_info.is_security and header_name in state["oshp_headers_missed"] and header_name not in HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED:
+            header_table += "<tr>"
+            header_table += f"<td>{header_info.name}</td>"
+            header_table += f"<td>{header_info.header_direction}</td>"
+            header_table += f"<td>{header_info.is_already_classified}</td>"
+            header_table += f"<td>{header_info.is_security_classification_explanation}</td>"
+            header_table += f"<td>{header_info.is_security_classification_validation_explanation}</td>"
+            header_table += "<td>"
+            if header_info.rfc_location is not None:
+                header_table += f'<a href="{header_info.rfc_location}">RFC</a>'
+            if header_info.spec_location is not None:
+                if header_info.rfc_location is not None:
+                    header_table += " - "
+                header_table += f'<a href="{header_info.spec_location}">SPEC</a>'
+            header_table += "</td></tr>"
+    header_table += "</table>"
+    md_table = md(header_table)
+    content = dashboard_md_tpl % (state["last_update"], md_table)
+    with open(DASHBOARD_FILENAME, mode="w", encoding=DEFAULT_ENCODING) as f:
+        f.write(content)
+    return state
 
 
 def assemble_agent() -> StateGraph:
@@ -525,6 +595,7 @@ def assemble_agent() -> StateGraph:
     agent_builder.add_node("identify_http_header_security_relation_with_model", identify_http_header_security_relation_with_model)
     agent_builder.add_node("validate_classification_state", validate_classification_state)
     agent_builder.add_node("identify_headers_missed_by_oshp", identify_headers_missed_by_oshp)
+    agent_builder.add_node("create_dashboard", create_dashboard)
     # Define the graph flow
     agent_builder.add_edge(START, "gather_http_header_names")
     agent_builder.add_edge("gather_http_header_names", "identify_http_header_directions_without_model")
@@ -533,7 +604,8 @@ def assemble_agent() -> StateGraph:
     agent_builder.add_edge("determine_classification_state_for_non_response_header", "identify_http_header_security_relation_with_model")
     agent_builder.add_edge("identify_http_header_security_relation_with_model", "validate_classification_state")
     agent_builder.add_conditional_edges("validate_classification_state", classification_is_over, {"no": "identify_http_header_security_relation_with_model", "yes": "identify_headers_missed_by_oshp"})
-    agent_builder.add_edge("identify_headers_missed_by_oshp", END)
+    agent_builder.add_edge("identify_headers_missed_by_oshp", "create_dashboard")
+    agent_builder.add_edge("create_dashboard", END)
     return agent_builder
 
 
@@ -548,5 +620,5 @@ if __name__ == "__main__":
     state = agent.invoke(state, config={"callbacks": [NodeLoggerCallback(node_names=node_names)]})
     with open(STATE_FILENAME, mode="w", encoding=DEFAULT_ENCODING) as f:
         json.dump(state, f, cls=DataclassEncoder, indent=2, sort_keys=True)
-    with open(DIAGRAM_FLOW_FILE, "wb") as f:
+    with open(DIAGRAM_FLOW_FILENAME, "wb") as f:
         f.write(agent.get_graph(xray=True).draw_mermaid_png())
