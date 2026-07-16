@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime as date_ref
@@ -17,7 +18,7 @@ from markdownify import markdownify as md
 from pydantic import BaseModel, Field
 
 DEBUG = True
-HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED = ["PUBLIC-KEY-PINS", "PUBLIC-KEY-PINS-REPORT-ONLY", "EXPECT-CT", "ACCESS-CONTROL-ALLOW-CREDENTIALS", "ACCESS-CONTROL-ALLOW-HEADERS", "ACCESS-CONTROL-ALLOW-METHODS", "ACCESS-CONTROL-EXPOSE-HEADERS", "ACCESS-CONTROL-ALLOW-ORIGIN", "SET-COOKIE"]
+README_FILENAME = "README.md"
 STATE_FILENAME = "state.json"
 DIAGRAM_FLOW_FILENAME = "diagram.png"
 DASHBOARD_FILENAME = "dashboard.md"
@@ -70,6 +71,7 @@ class PipelineState(TypedDict):
     last_update: str
     oshp_headers_missed: list[str]
     loop_interation_count: int
+    http_response_headers_explicitly_ignored: list[str]
 
 
 class HeaderDirection(BaseModel):
@@ -165,6 +167,22 @@ def handle_structured_model_call(model_name: str, structured_model, messages: li
     return result
 
 
+def init_http_response_headers_explicitly_ignored_collection(state: PipelineState) -> PipelineState:
+    http_response_headers_expliclity_ignored_collection = []
+    # Load the list of headers to ignore from the README file from a dedicated section
+    headers_table_extraction_regex = r"<!--IGNORED_HEADERS_SECTION_START-->(.*)<!--IGNORED_HEADERS_SECTION_END-->"
+    with open(README_FILENAME, mode="r", encoding=DEFAULT_ENCODING) as f:
+        content = f.read()
+    table_lines = re.findall(headers_table_extraction_regex, content, re.IGNORECASE | re.DOTALL)
+    for line in table_lines[0].split("\n"):
+        if "`" not in line:
+            continue
+        header_name = line.split("|")[1].strip("` ").upper()
+        http_response_headers_expliclity_ignored_collection.append(header_name)
+    state["http_response_headers_explicitly_ignored"] = http_response_headers_expliclity_ignored_collection
+    return state
+
+
 def gather_http_header_names(state: PipelineState) -> PipelineState:
     headers_collections = state["headers_info_collection"]
     # Step 1: Use MDN data source
@@ -191,7 +209,7 @@ def gather_http_header_names(state: PipelineState) -> PipelineState:
             header_info.spec_location = spec_url
         else:
             header_info = HeaderInfo(header_name_upper, spec_url, None, None, "UNKNOWN", False, False)
-        if header_name_upper in HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED:
+        if header_name_upper in state["http_response_headers_explicitly_ignored"]:
             header_info.header_direction = "RESPONSE"
             header_info.is_already_classified = True
             header_info.is_security = True
@@ -523,7 +541,7 @@ def identify_headers_missed_by_oshp(state: PipelineState) -> PipelineState:
     oshp_headers = [hdr["name"].upper() for hdr in response.json()["headers"]]
     # Find security header not documented by OSHP
     for header_name, header_info in headers_collections.items():
-        if header_info.header_direction == "RESPONSE" and header_info.is_security and header_name not in oshp_headers and header_name not in HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED:
+        if header_info.header_direction == "RESPONSE" and header_info.is_security and header_name not in oshp_headers and header_name not in state["http_response_headers_explicitly_ignored"]:
             oshp_headers_missed.append(header_name)
     state["last_update"] = date_ref.now().strftime("%Y-%m-%d %H:%M:%S")
     state["oshp_headers_missed"] = oshp_headers_missed
@@ -562,7 +580,7 @@ def create_dashboard(state: PipelineState) -> PipelineState:
 </tr>
     """
     for header_name, header_info in headers_collections.items():
-        if header_info.is_security and header_name in state["oshp_headers_missed"] and header_name not in HTTP_RESPONSE_HEADERS_EXPLICLITY_IGNORED:
+        if header_info.is_security and header_name in state["oshp_headers_missed"] and header_name not in state["http_response_headers_explicitly_ignored"]:
             header_table += "<tr>"
             header_table += f"<td>{header_info.name}</td>"
             header_table += f"<td>{header_info.header_direction}</td>"
@@ -588,6 +606,7 @@ def create_dashboard(state: PipelineState) -> PipelineState:
 def assemble_agent() -> StateGraph:
     agent_builder = StateGraph(PipelineState)
     # Define nodes of the graph
+    agent_builder.add_node("init_http_response_headers_explicitly_ignored_collection", init_http_response_headers_explicitly_ignored_collection)
     agent_builder.add_node("gather_http_header_names", gather_http_header_names)
     agent_builder.add_node("identify_http_header_directions_without_model", identify_http_header_directions_without_model)
     agent_builder.add_node("identify_http_header_directions_with_model", identify_http_header_directions_with_model)
@@ -597,7 +616,8 @@ def assemble_agent() -> StateGraph:
     agent_builder.add_node("identify_headers_missed_by_oshp", identify_headers_missed_by_oshp)
     agent_builder.add_node("create_dashboard", create_dashboard)
     # Define the graph flow
-    agent_builder.add_edge(START, "gather_http_header_names")
+    agent_builder.add_edge(START, "init_http_response_headers_explicitly_ignored_collection")
+    agent_builder.add_edge("init_http_response_headers_explicitly_ignored_collection", "gather_http_header_names")
     agent_builder.add_edge("gather_http_header_names", "identify_http_header_directions_without_model")
     agent_builder.add_edge("identify_http_header_directions_without_model", "identify_http_header_directions_with_model")
     agent_builder.add_edge("identify_http_header_directions_with_model", "determine_classification_state_for_non_response_header")
@@ -614,7 +634,7 @@ if __name__ == "__main__":
     if os.path.exists(STATE_FILENAME):
         with open(STATE_FILENAME, mode="r", encoding=DEFAULT_ENCODING) as f:
             data = json.load(f)
-            state = PipelineState(headers_info_collection={k: HeaderInfo(**v) for k, v in data["headers_info_collection"].items()}, last_update=data["last_update"], oshp_headers_missed=data["oshp_headers_missed"], loop_interation_count=0)
+            state = PipelineState(headers_info_collection={k: HeaderInfo(**v) for k, v in data["headers_info_collection"].items()}, last_update=data["last_update"], oshp_headers_missed=data["oshp_headers_missed"], loop_interation_count=0, http_response_headers_explicitly_ignored=[])
     agent = assemble_agent().compile()
     node_names = set(agent.nodes.keys())
     state = agent.invoke(state, config={"callbacks": [NodeLoggerCallback(node_names=node_names)]})

@@ -1,11 +1,8 @@
 
-> 🕑 Last update 2026-07-16 12:08:46.
+> 🕑 Last update 2026-07-16 15:55:06.
 
 | Header name | Header direction | Fully classified | Classifier explanation | Validator explanation | Links |
 | --- | --- | --- | --- | --- | --- |
-| ACCESS-CONTROL | RESPONSE | True | Enforces cross-origin access control for resources |  | [RFC](https://www.w3.org/TR/2007/WD-access-control-20071126/#access-control0) |
-| ACTIVATE-STORAGE-ACCESS | RESPONSE | True | Explicitly part of Security Considerations (§8) for CSRF protection and opt-in security boundary |  | [RFC](https://privacycg.github.io/storage-access-headers) - [SPEC](https://privacycg.github.io/storage-access-headers/#activate-storage-access-header) |
-| AUTHENTICATION-INFO | RESPONSE | True | AUTHENTICATION-INFO is defined in RFC 7615 as security-related for HTTP authentication. |  | [RFC](https://www.rfc-editor.org/rfc/rfc9110.txt) |
 | CONTENT-DIGEST | RESPONSE | True | Mitigates data corruption via integrity digests |  | [RFC](https://www.rfc-editor.org/rfc/rfc9530.txt) |
 | CONTENT-SECURITY-POLICY-REPORT-ONLY | RESPONSE | True | Monitors violations, indirectly informing security posture |  | [RFC](https://www.w3.org/TR/CSP/#cspro-header) - [SPEC](https://w3c.github.io/webappsec-csp/#cspro-header) |
 | CROSS-ORIGIN-EMBEDDER-POLICY-REPORT-ONLY | RESPONSE | True | Enforces cross-origin embedding policies, directly impacting security posture. |  | [RFC](https://html.spec.whatwg.org/multipage/origin.html#cross-origin-embedder-policy-report-only) |
