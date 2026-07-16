@@ -1,0 +1,35 @@
+name: Update headers dashboard
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0"
+permissions: read-all
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          architecture: x64
+      - name: Install dependencies
+        run: sudo apt-get install wget dos2unix         
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv sync
+      - name: Execute the CI script
+        env:
+          NVIDIA_BUILD_API_KEY: ${{ secrets.NVIDIA_BUILD_API_KEY }}      
+        run: |
+          dos2unix *.sh
+          chmod +x ci.sh
+          bash ci.sh
+      - name: Set up Git user
+        run: git config --global user.email "gha@github.com"; git config --global user.name "GHActionBot"
+      - name: Commit update
+        run: git commit -m "Sync updated files" diagram.png state.json dashboard.md; git push
