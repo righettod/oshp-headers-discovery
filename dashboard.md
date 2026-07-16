@@ -1,5 +1,5 @@
 
-> 🕑 Last update 2026-07-16 15:55:06.
+> 🕑 Last update 2026-07-16 16:33:40.
 
 | Header name | Header direction | Fully classified | Classifier explanation | Validator explanation | Links |
 | --- | --- | --- | --- | --- | --- |
@@ -22,7 +22,6 @@
 | SECURE-SESSION-REGISTRATION | RESPONSE | True | Protects session credentials via private key binding, mitigating cookie theft. |  | [SPEC](https://w3c.github.io/webappsec-dbsc/#header-secure-session-registration) |
 | SECURE-SESSION-RESPONSE | RESPONSE | True | Directly mitigates session theft by cryptographically binding credentials to a device |  | [SPEC](https://w3c.github.io/webappsec-dbsc/#header-secure-session-registration) |
 | SECURE-SESSION-SKIPPED | RESPONSE | True | Part of DBSC security mechanism to signal skipped sessions for security policy reasons |  | [SPEC](https://w3c.github.io/webappsec-dbsc/#header-secure-session-skipped) |
-| SET-COOKIE2 | RESPONSE | True | RFC explicitly frames cookies as security/privacy mechanisms |  | [RFC](https://www.rfc-editor.org/rfc/rfc2965.txt) |
 | SET-LOGIN | RESPONSE | True | Directly controls login status, impacting authentication state security. |  | [SPEC](https://w3c-fedid.github.io/login-status/#login-status-http) |
 | SIGNATURE | RESPONSE | True | SIGNATURE header provides message authenticity and integrity, directly impacting security posture. |  | [RFC](https://www.rfc-editor.org/rfc/rfc9421.txt) - [SPEC](https://httpwg.org/specs/rfc9421.html#signature-header) |
 | SPECULATION-RULES | RESPONSE | True | Explicit Security Considerations section in RFC |  | [SPEC](https://html.spec.whatwg.org/multipage/speculative-loading.html#the-speculation-rules-header) |

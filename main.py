@@ -442,7 +442,7 @@ def determine_classification_state_for_non_response_header(state: PipelineState)
     return state
 
 
-def validate_classification_state(state: PipelineState) -> PipelineState:
+def validate_classification_state_with_model(state: PipelineState) -> PipelineState:
     # Deliberately a different model family than the classifier's nvidia/llama-3.3-nemotron-super-49b-v1
     # (itself a Llama-3.3 derivative) so the "independent reviewer" isn't just the same weights re-rolled.
     model_name = "mistralai/mistral-medium-3.5-128b"
@@ -612,7 +612,7 @@ def assemble_agent() -> StateGraph:
     agent_builder.add_node("identify_http_header_directions_with_model", identify_http_header_directions_with_model)
     agent_builder.add_node("determine_classification_state_for_non_response_header", determine_classification_state_for_non_response_header)
     agent_builder.add_node("identify_http_header_security_relation_with_model", identify_http_header_security_relation_with_model)
-    agent_builder.add_node("validate_classification_state", validate_classification_state)
+    agent_builder.add_node("validate_classification_state_with_model", validate_classification_state_with_model)
     agent_builder.add_node("identify_headers_missed_by_oshp", identify_headers_missed_by_oshp)
     agent_builder.add_node("create_dashboard", create_dashboard)
     # Define the graph flow
@@ -622,8 +622,8 @@ def assemble_agent() -> StateGraph:
     agent_builder.add_edge("identify_http_header_directions_without_model", "identify_http_header_directions_with_model")
     agent_builder.add_edge("identify_http_header_directions_with_model", "determine_classification_state_for_non_response_header")
     agent_builder.add_edge("determine_classification_state_for_non_response_header", "identify_http_header_security_relation_with_model")
-    agent_builder.add_edge("identify_http_header_security_relation_with_model", "validate_classification_state")
-    agent_builder.add_conditional_edges("validate_classification_state", classification_is_over, {"no": "identify_http_header_security_relation_with_model", "yes": "identify_headers_missed_by_oshp"})
+    agent_builder.add_edge("identify_http_header_security_relation_with_model", "validate_classification_state_with_model")
+    agent_builder.add_conditional_edges("validate_classification_state_with_model", classification_is_over, {"no": "identify_http_header_security_relation_with_model", "yes": "identify_headers_missed_by_oshp"})
     agent_builder.add_edge("identify_headers_missed_by_oshp", "create_dashboard")
     agent_builder.add_edge("create_dashboard", END)
     return agent_builder
