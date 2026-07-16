@@ -1,3 +1,5 @@
+[![Update headers dashboard](https://github.com/righettod/oshp-headers-discovery/actions/workflows/update_dashboard.yml/badge.svg?branch=main)](https://github.com/righettod/oshp-headers-discovery/actions/workflows/update_dashboard.yml) ![MadeWitVSCode](https://img.shields.io/static/v1?label=Made%20with&message=VisualStudio%20Code&color=blue&?style=for-the-badge&logo=visualstudio)  ![AutomatedWith](https://img.shields.io/static/v1?label=Automated%20with&message=GitHub%20Actions&color=blue&?style=for-the-badge&logo=github)
+
 # Description
 
 🎯 This project is an AI agent for [OSHP](https://github.com/OWASP/www-project-secure-headers/) that tries to find any *HTTP response security header* that OSHP missed and that should be investigated for potential adding.
