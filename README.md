@@ -40,7 +40,7 @@ The only "agentic" decision point is the LLM filter + LLM validator pair.
 # Ignored headers and reason
 
 > [!IMPORTANT]
-> Ignoring is not definitive, a header can be considered I made a mistake in understanding its purpose.
+> Ignoring is not definitive, a header can be considered in another round if I made a mistake in understanding its purpose.
 
 > [!NOTE]
 > I used Claude to help me to understand and identify the purpose of a header and if it fit the selection criteria.
@@ -81,5 +81,7 @@ The only "agentic" decision point is the LLM filter + LLM validator pair.
 | `WWW-AUTHENTICATE`                  | The header that tells clients how to authenticate.                                                                                                                                                                                                                                                  |
 | `SEC-PRIVATE-STATE-TOKEN`           | The header (part of the Private State Tokens API, formerly Trust Tokens) requires the application to implement specific features - namely, the token issuance and redemption infrastructure. The server must actively participate in the protocol by operating as a token issuer or relying on one. |
 | `SEC-PRIVATE-STATE-TOKEN-LIFETIME`  | Same like for **SEC-PRIVATE-STATE-TOKEN**.                                                                                                                                                                                                                                                          |
+| `SECURE-SESSION-REGISTRATION`       | The header itself is just the entry point into a full protocol. Without the registration and refresh endpoints functioning correctly on the server, the header does nothing.                                                                                                                        |
+| `SECURE-SESSION-CHALLENGE`          | Same like for **SECURE-SESSION-REGISTRATION**.                                                                                                                                                                                                                                                      |
 
 <!--IGNORED_HEADERS_SECTION_END-->
