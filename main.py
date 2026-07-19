@@ -535,10 +535,14 @@ def validate_classification_state_with_model(state: PipelineState) -> PipelineSt
 def identify_headers_missed_by_oshp(state: PipelineState) -> PipelineState:
     headers_collections = state["headers_info_collection"]
     oshp_headers_missed = []
-    source_url = "https://raw.githubusercontent.com/OWASP/www-project-secure-headers/refs/heads/master/ci/headers_add.json"
+    source_url = "https://raw.githubusercontent.com/OWASP/www-project-secure-headers/refs/heads/master/mainsite/02_browser_support.md"
     response = httpx.get(source_url, follow_redirects=False, timeout=HTTP_REQUEST_TIMEOUT)
     response.raise_for_status()
-    oshp_headers = [hdr["name"].upper() for hdr in response.json()["headers"]]
+    content = response.text
+    header_names_extraction_regex = r"`([A-Za-z]+\-[A-Za-z\-]+)`"
+    oshp_headers = []
+    for header_name in re.findall(header_names_extraction_regex, content):
+        oshp_headers.append(header_name.strip("` ").upper())
     # Find security header not documented by OSHP
     for header_name, header_info in headers_collections.items():
         if header_info.header_direction == "RESPONSE" and header_info.is_security and header_name not in oshp_headers and header_name not in state["http_response_headers_explicitly_ignored"]:
