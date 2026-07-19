@@ -39,8 +39,7 @@ The only "agentic" decision point is the LLM filter + LLM validator pair.
 
 # Candidate headers to be investigated for adding
 
-1. [Integrity-Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Integrity-Policy).
-2. [Origin-Agent-Cluster](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin-Agent-Cluster).
+* [Origin-Agent-Cluster](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin-Agent-Cluster).
 
 # Ignored headers and reason
 
