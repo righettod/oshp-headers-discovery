@@ -32,4 +32,6 @@ jobs:
       - name: Set up Git user
         run: git config --global user.email "gha@github.com"; git config --global user.name "GHActionBot"
       - name: Commit update
-        run: git commit -m "Sync updated files" diagram.png state.json dashboard.md; git push
+        run: |
+          git add diagram.png state.json dashboard.md
+          git diff --cached --quiet || (git commit -m "Sync updated files" && git push)
