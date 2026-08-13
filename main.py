@@ -260,7 +260,7 @@ def gather_http_header_names(state: PipelineState) -> PipelineState:
             response = httpx.get(target_url, follow_redirects=True, timeout=HTTP_REQUEST_TIMEOUT)
             # Handle case where spec/rfc point to a accessible resource
             if response.status_code != 200:
-                msg = f"Source point to a non accessible link (HTTP {response.status_code})"
+                msg = f"Spec/RFC source for the header name '{header_name}' point to a non accessible resource (HTTP {response.status_code})"
                 header_info.rfc_or_spec_content = msg
                 print(f"[!] {msg}: '{target_url}'.")
             else:
