@@ -258,8 +258,13 @@ def gather_http_header_names(state: PipelineState) -> PipelineState:
             target_url = None
         if target_url is not None:
             response = httpx.get(target_url, follow_redirects=True, timeout=HTTP_REQUEST_TIMEOUT)
-            response.raise_for_status()
-            header_info.rfc_or_spec_content = response.text
+            # Handle case where spec/rfc point to a accessible resource
+            if response.status_code != 200:
+                msg = f"Source point to a non accessible link (HTTP {response.status_code})"
+                header_info.rfc_or_spec_content = msg
+                print(f"[!] {msg}: '{target_url}'.")
+            else:
+                header_info.rfc_or_spec_content = response.text
             # Convert the HTML to markdown the help a model to process the RFC/Spec data
             if "<!doctype html>" in header_info.rfc_or_spec_content.lower():
                 header_info.rfc_or_spec_content = md(header_info.rfc_or_spec_content)
