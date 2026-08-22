@@ -87,11 +87,13 @@ The only "agentic" decision point is the LLM filter + LLM validator pair.
 | `SEC-PRIVATE-STATE-TOKEN-LIFETIME`  | Same like for **SEC-PRIVATE-STATE-TOKEN**.                                                                                                                                                                                                                                                          |
 | `SECURE-SESSION-REGISTRATION`       | The header itself is just the entry point into a full protocol. Without the registration and refresh endpoints functioning correctly on the server, the header does nothing.                                                                                                                        |
 | `SECURE-SESSION-CHALLENGE`          | Same like for **SECURE-SESSION-REGISTRATION**.                                                                                                                                                                                                                                                      |
-| `ORIGIN-AGENT-CLUSTER`              | MDN and WEB.DEV expliclty says that this header should not be considered as should not be viewed as a security feature (see [^1] for details).                                                                                                                                                      |
+| `ORIGIN-AGENT-CLUSTER`              | MDN and WEB.DEV expliclty says that this header should not be considered as should not be viewed as a security feature (see [here](#origin-agent-cluster) for details).                                                                                                                             |
 
 <!--IGNORED_HEADERS_SECTION_END-->
 
-[^1]: Clarification about HTTP response header `ORIGIN-AGENT-CLUSTER`
+# Technical details about ignored headers
+
+## Origin-Agent-Cluster
 
 ℹ️ Extract from the [Mozilla](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin-Agent-Cluster#description) documentation:
 
