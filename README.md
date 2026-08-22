@@ -4,6 +4,10 @@
 
 🎯 This project is an AI agent for [OSHP](https://github.com/OWASP/www-project-secure-headers/) that tries to find any *HTTP response security header* that OSHP missed and that should be investigated for potential adding.
 
+# Dashboard
+
+📊 The file [dashboard.md](dashboard.md) contains the result of the processing that must be reviewed to missing headers.
+
 # Flow
 
 🤖 The following schema show the flow followed by of the agent:
@@ -32,10 +36,6 @@ The only "agentic" decision point is the LLM filter + LLM validator pair.
 [Data Fetcher] → [Header Merger] → [Direction Classifier] → [LLM Filter] → 
 [LLM Validator] → [OSHP Diff] → [Report]
 ```
-
-# Dashboard
-
-📊 The file [dashboard.md](dashboard.md) contains the result of the processing that must be reviewed to missing headers.
 
 # Candidate headers to be investigated for adding
 
