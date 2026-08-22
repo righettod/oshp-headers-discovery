@@ -97,18 +97,12 @@ The only "agentic" decision point is the LLM filter + LLM validator pair.
 
 ℹ️ Extract from the [Mozilla](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin-Agent-Cluster#description) documentation:
 
-```text
-Origin-keyed agent clusters should not be viewed as a security feature: browsers may ignore the request for various reasons, or 
-choose to implement it in a way that does not provide memory protection (for example, using separate threads instead of separate processes).
-Instead, this feature is a hint that the user experience would be improved if this origin were allocated dedicated resources.
-```
+> Origin-keyed agent clusters should not be viewed as a security feature: Browsers may ignore the request for various reasons, or choose to implement it in a way that does not provide memory protection (for example, using separate threads instead of separate processes). Instead, this feature is a hint that the user experience would be improved if this origin were allocated dedicated resources.
 
 ℹ️ Extract from a [web.dev post](https://web.dev/articles/origin-agent-cluster?hl=en#origin-keying_is_not_a_security_feature) about this header:
 
-```text
-While using an origin-keyed agent cluster does isolate your origin from synchronous access from same-site cross-origin pages, it does not give the
-protection of security-related headers like Cross-Origin-Resource-Policy and Cross-Origin-Opener-Policy. In particular, it is not a reliable
-protection against side channel attacks like Spectre.
-...
-For these reasons, it's important not to think of origin-keyed agent clusters as a security feature.
-```
+> While using an origin-keyed agent cluster does isolate your origin from synchronous access from same-site cross-origin pages, it does not give the protection of security-related headers like Cross-Origin-Resource-Policy and Cross-Origin-Opener-Policy. In particular, it is not a reliable protection against side channel attacks like Spectre.
+>
+> ...
+>
+> For these reasons, it's important not to think of origin-keyed agent clusters as a security feature.
