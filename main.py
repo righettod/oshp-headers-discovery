@@ -313,8 +313,8 @@ def identify_http_header_directions_without_model(state: PipelineState) -> Pipel
 def identify_http_header_directions_with_model(state: PipelineState) -> PipelineState:
     # For every header for which the direction was not identified then use a model to read the rfc of the spec
     # to determine the direction
-    model_name = "meta/llama-3.1-8b-instruct"
-    model_maximum_context_length = 131072  # 128000 * 1024 => See https://docs.api.nvidia.com/nim/reference/meta-llama-3_1-8b#new-capabilities
+    model_name = "deepseek-ai/deepseek-v4-pro-0813"
+    model_maximum_context_length = 131072  # 128K context
     max_completion_tokens_wanted = 50
     system_prompt = """
 You are a classifier that reads a RFC and an HTTP header name, and determines if the header is a REQUEST or RESPONSE header.
@@ -369,8 +369,8 @@ RFC content: `{header_info.rfc_or_spec_content[:context_length_limit]}`.
 
 
 def identify_http_header_security_relation_with_model(state: PipelineState) -> PipelineState:
-    model_name = "nvidia/llama-3.3-nemotron-super-49b-v1"
-    model_maximum_context_length = 131072  # 128000 * 1024 => See https://docs.api.nvidia.com/nim/reference/nvidia-llama-3_3-nemotron-super-49b-v1_5#model-overview
+    model_name = "deepseek-ai/deepseek-v4-pro-0813"
+    model_maximum_context_length = 131072  # 128K context
     max_completion_tokens_wanted = 200
     system_prompt = """
   You are a classifier that reads an RFC/specification and the name of an HTTP RESPONSE header, and determines whether the header is SECURITY-RELATED.
@@ -448,10 +448,10 @@ def determine_classification_state_for_non_response_header(state: PipelineState)
 
 
 def validate_classification_state_with_model(state: PipelineState) -> PipelineState:
-    # Deliberately a different model family than the classifier's nvidia/llama-3.3-nemotron-super-49b-v1
-    # (itself a Llama-3.3 derivative) so the "independent reviewer" isn't just the same weights re-rolled.
-    model_name = "mistralai/mistral-medium-3.5-128b"
-    model_maximum_context_length = 131072  # Empirically confirmed to accept requests at least this large on NVIDIA Build
+    # Deliberately a different model family than the classifier's deepseek-ai/deepseek-v4-pro-0813
+    # (DeepSeek family) so the "independent reviewer" isn't just the same weights re-rolled.
+    model_name = "minimaxai/minimax-m3"
+    model_maximum_context_length = 131072  # 128K context
     max_completion_tokens_wanted = 200
     system_prompt = """
   You are an independent reviewer that receives an HTTP response header, its RFC/spec content, and a prior classifier's verdict on whether the header is SECURITY-RELATED. Your job is to check that verdict against the RFC/spec content and the definition below, and say whether you agree or disagree. Do not simply defer to the prior explanation — re-derive the answer yourself from the content provided.

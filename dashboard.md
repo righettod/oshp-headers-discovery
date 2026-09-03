@@ -1,10 +1,8 @@
 
-> 🕑 Last update 2026-08-23 00:04:58.
+> 🕑 Last update 2026-09-03 08:44:17.
 
 | Header name | Header direction | Fully classified | Classifier explanation | Validator explanation | Links |
 | --- | --- | --- | --- | --- | --- |
-| CONTENT-SECURITY-POLICY-REPORT-ONLY | RESPONSE | True | Monitors violations, indirectly informing security posture |  | [RFC](https://www.w3.org/TR/CSP/#cspro-header) - [SPEC](https://w3c.github.io/webappsec-csp/#cspro-header) |
-| CROSS-ORIGIN-EMBEDDER-POLICY-REPORT-ONLY | RESPONSE | True | Enforces cross-origin embedding policies, directly impacting security posture. |  | [RFC](https://html.spec.whatwg.org/multipage/origin.html#cross-origin-embedder-policy-report-only) |
+| CONNECTION-ALLOWLIST | RESPONSE | True | Primary purpose is mitigating exfiltration by restricting connections, with explicit Security Considerations. |  | [SPEC](https://wicg.github.io/connection-allowlists/#http-headerdef-connection-allowlist) |
+| CONNECTION-ALLOWLIST-REPORT-ONLY | RESPONSE | True | Report-only variant of Connection-Allowlist, a policy restricting outbound connections to mitigate exfiltration attacks. |  | [SPEC](https://wicg.github.io/connection-allowlists/#http-headerdef-connection-allowlist-report-only) |
 | CROSS-ORIGIN-OPENER-POLICY-REPORT-ONLY | RESPONSE | True | Enforces cross-origin opener policies, controlling browsing context groups and reporting violations, directly impacting security posture. |  | [RFC](https://html.spec.whatwg.org/multipage/origin.html#cross-origin-opener-policy-report-only) |
-| INTEGRITY-POLICY-REPORT-ONLY | RESPONSE | True | Enforces integrity verification for subresources, mitigating tampering attacks |  | [SPEC](https://w3c.github.io/webappsec-subresource-integrity/#integrity-policy-section) |
-| PERMISSIONS-POLICY-REPORT-ONLY | RESPONSE | True | Controls feature permissions, limiting API access based on origin |  | [SPEC](https://w3c.github.io/webappsec-permissions-policy/#permissions-policy-report-only-http-header-field) |
