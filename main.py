@@ -313,7 +313,7 @@ def identify_http_header_directions_without_model(state: PipelineState) -> Pipel
 def identify_http_header_directions_with_model(state: PipelineState) -> PipelineState:
     # For every header for which the direction was not identified then use a model to read the rfc of the spec
     # to determine the direction
-    model_name = "deepseek-ai/deepseek-v4-pro-0813"
+    model_name = "openai/gpt-oss-20b"
     model_maximum_context_length = 131072  # 128K context
     max_completion_tokens_wanted = 50
     system_prompt = """
@@ -369,7 +369,7 @@ RFC content: `{header_info.rfc_or_spec_content[:context_length_limit]}`.
 
 
 def identify_http_header_security_relation_with_model(state: PipelineState) -> PipelineState:
-    model_name = "deepseek-ai/deepseek-v4-pro-0813"
+    model_name = "openai/gpt-oss-20b"
     model_maximum_context_length = 131072  # 128K context
     max_completion_tokens_wanted = 200
     system_prompt = """
@@ -448,9 +448,9 @@ def determine_classification_state_for_non_response_header(state: PipelineState)
 
 
 def validate_classification_state_with_model(state: PipelineState) -> PipelineState:
-    # Deliberately a different model family than the classifier's deepseek-ai/deepseek-v4-pro-0813
-    # (DeepSeek family) so the "independent reviewer" isn't just the same weights re-rolled.
-    model_name = "minimaxai/minimax-m3"
+    # Deliberately a different model family than the classifier's openai/gpt-oss-20b
+    # (OpenAI family) so the "independent reviewer" isn't just the same weights re-rolled.
+    model_name = "nv-mistralai/mistral-nemo-12b-instruct"
     model_maximum_context_length = 131072  # 128K context
     max_completion_tokens_wanted = 200
     system_prompt = """
